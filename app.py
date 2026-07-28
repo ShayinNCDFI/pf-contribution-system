@@ -29,13 +29,7 @@ def get_supabase():
 
 
 supabase = get_supabase()
-try:
-    test = supabase.table("admins").select("id, username").execute()
-    st.write("Supabase connection successful")
-    st.write(test.data)
-except Exception as e:
-    st.error("Supabase connection failed")
-    st.write(e)
+
 
 # ==========================================
 # PASSWORD FUNCTIONS
@@ -68,34 +62,22 @@ def check_password(password, hashed_password):
 
 def login(username, password):
 
-    username = username.strip()
-
-    st.write("DEBUG Username entered:", username)
-
     admin_result = (
         supabase
         .table("admins")
         .select("id, username, password")
-        .eq("username", username)
+        .eq("username", username.strip())
         .execute()
     )
-
-    st.write("DEBUG Admin records found:", len(admin_result.data))
 
     if admin_result.data:
 
         admin = admin_result.data[0]
 
-        st.write("DEBUG Admin username:", admin["username"])
-
-        password_ok = bcrypt.checkpw(
+        if bcrypt.checkpw(
             password.encode("utf-8"),
             admin["password"].encode("utf-8")
-        )
-
-        st.write("DEBUG Password correct:", password_ok)
-
-        if password_ok:
+        ):
 
             return {
                 "user_type": "admin",
@@ -104,7 +86,7 @@ def login(username, password):
             }
 
     return None
-    # ==========================================
+# ==========================================
 # LOGIN PAGE
 # ==========================================
 
