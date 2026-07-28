@@ -1,16 +1,34 @@
 import streamlit as st
-import sqlite3
-import bcrypt
-from datetime import datetime
 import pandas as pd
+import bcrypt
+from supabase import create_client
 
 
 # ==========================================
-# DATABASE CONNECTION
+# PAGE CONFIG
 # ==========================================
 
-def get_connection():
-    return sqlite3.connect("pf_database.db")
+st.set_page_config(
+    page_title="PF Contribution System",
+    page_icon="💼",
+    layout="wide"
+)
+
+
+# ==========================================
+# SUPABASE CONNECTION
+# ==========================================
+
+@st.cache_resource
+def get_supabase():
+
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+
+    return create_client(url, key)
+
+
+supabase = get_supabase()
 
 
 # ==========================================
@@ -18,6 +36,7 @@ def get_connection():
 # ==========================================
 
 def hash_password(password):
+
     return bcrypt.hashpw(
         password.encode("utf-8"),
         bcrypt.gensalt()
@@ -25,74 +44,79 @@ def hash_password(password):
 
 
 def check_password(password, hashed_password):
-    return bcrypt.checkpw(
-        password.encode("utf-8"),
-        hashed_password.encode("utf-8")
-    )
+
+    try:
+
+        return bcrypt.checkpw(
+            password.encode("utf-8"),
+            hashed_password.encode("utf-8")
+        )
+
+    except Exception:
+
+        return False
 
 
 # ==========================================
-# LOGIN FUNCTION
+# LOGIN
 # ==========================================
 
 def login(username, password):
 
-    connection = get_connection()
-    cursor = connection.cursor()
-
     # Check Admin
-    cursor.execute(
-        """
-        SELECT username, password
-        FROM admins
-        WHERE username = ?
-        """,
-        (username,)
+
+    admin_result = (
+        supabase
+        .table("admins")
+        .select("*")
+        .eq("username", username)
+        .execute()
     )
 
-    admin = cursor.fetchone()
+    if admin_result.data:
 
-    if admin:
+        admin = admin_result.data[0]
 
-        if check_password(password, admin[1]):
-
-            connection.close()
+        if check_password(
+            password,
+            admin["password"]
+        ):
 
             return {
                 "user_type": "admin",
-                "user_id": username,
+                "user_id": admin["username"],
                 "must_change_password": False
             }
 
+
     # Check Employee
-    cursor.execute(
-        """
-        SELECT
-            employee_id,
-            employee_name,
-            username,
-            password,
-            must_change_password
-        FROM employees
-        WHERE username = ?
-        """,
-        (username,)
+
+    employee_result = (
+        supabase
+        .table("employees")
+        .select("*")
+        .eq("username", username)
+        .execute()
     )
 
-    employee = cursor.fetchone()
+    if employee_result.data:
 
-    connection.close()
+        employee = employee_result.data[0]
 
-    if employee:
-
-        if check_password(password, employee[3]):
+        if check_password(
+            password,
+            employee["password"]
+        ):
 
             return {
                 "user_type": "employee",
-                "user_id": employee[0],
-                "employee_name": employee[1],
-                "must_change_password": bool(employee[4])
+                "user_id": employee["employee_id"],
+                "employee_name": employee["employee_name"],
+                "must_change_password": bool(
+                    employee["must_change_password"]
+                )
             }
+
 
     return None
 
@@ -103,7 +127,7 @@ def login(username, password):
 
 def login_page():
 
-    st.title("PF Contribution System")
+    st.title("💼 PF Contribution System")
 
     st.subheader("Login")
 
@@ -116,7 +140,10 @@ def login_page():
         type="password"
     )
 
-    if st.button("Login"):
+    if st.button(
+        "Login",
+        type="primary"
+    ):
 
         if not username or not password:
 
@@ -126,35 +153,51 @@ def login_page():
 
             return
 
-        user = login(
-            username,
-            password
-        )
+        try:
 
-        if user:
-
-            st.session_state.logged_in = True
-
-            st.session_state.user_type = user["user_type"]
-
-            st.session_state.user_id = user["user_id"]
-
-            st.session_state.employee_name = user.get(
-                "employee_name",
-                ""
+            user = login(
+                username,
+                password
             )
 
-            st.session_state.must_change_password = user[
-                "must_change_password"
-            ]
+            if user:
 
-            st.rerun()
+                st.session_state.logged_in = True
 
-        else:
+                st.session_state.user_type = (
+                    user["user_type"]
+                )
+
+                st.session_state.user_id = (
+                    user["user_id"]
+                )
+
+                st.session_state.employee_name = (
+                    user.get(
+                        "employee_name",
+                        ""
+                    )
+                )
+
+                st.session_state.must_change_password = (
+                    user["must_change_password"]
+                )
+
+                st.rerun()
+
+            else:
+
+                st.error(
+                    "Invalid username or password."
+                )
+
+        except Exception as e:
 
             st.error(
-                "Invalid username or password."
+                "Unable to connect to the database."
             )
+
+            st.write(e)
 
 
 # ==========================================
@@ -166,7 +209,7 @@ def force_password_change():
     employee_id = st.session_state.user_id
 
     st.title(
-        "Change Temporary Password"
+        "🔐 Change Temporary Password"
     )
 
     st.warning(
@@ -184,7 +227,8 @@ def force_password_change():
     )
 
     if st.button(
-        "Set New Password"
+        "Set New Password",
+        type="primary"
     ):
 
         if not new_password:
@@ -215,32 +259,39 @@ def force_password_change():
             new_password
         )
 
-        connection = get_connection()
-        cursor = connection.cursor()
+        try:
 
-        cursor.execute(
-            """
-            UPDATE employees
-            SET password = ?,
-                must_change_password = 0
-            WHERE employee_id = ?
-            """,
             (
-                hashed_password,
-                employee_id
+                supabase
+                .table("employees")
+                .update(
+                    {
+                        "password": hashed_password,
+                        "must_change_password": 0
+                    }
+                )
+                .eq(
+                    "employee_id",
+                    employee_id
+                )
+                .execute()
             )
-        )
 
-        connection.commit()
-        connection.close()
+            st.session_state.must_change_password = False
 
-        st.session_state.must_change_password = False
+            st.success(
+                "Password changed successfully!"
+            )
 
-        st.success(
-            "Password changed successfully!"
-        )
+            st.rerun()
 
-        st.rerun()
+        except Exception as e:
+
+            st.error(
+                "Unable to change password."
+            )
+
+            st.write(e)
 
 
 # ==========================================
@@ -254,7 +305,7 @@ def employee_dashboard():
     employee_name = st.session_state.employee_name
 
     st.title(
-        "Employee Dashboard"
+        "👤 Employee Dashboard"
     )
 
     st.write(
@@ -265,8 +316,6 @@ def employee_dashboard():
         f"Employee ID: **{employee_id}**"
     )
 
-    # Sidebar menu
-
     menu = st.sidebar.selectbox(
         "Menu",
         [
@@ -276,8 +325,9 @@ def employee_dashboard():
         ]
     )
 
+
     # ======================================
-    # SUBMIT PF CONTRIBUTION
+    # SUBMIT PF
     # ======================================
 
     if menu == "Submit PF Contribution":
@@ -308,7 +358,7 @@ def employee_dashboard():
             "Year",
             min_value=2020,
             max_value=2100,
-            value=datetime.now().year
+            value=2026
         )
 
         basic_salary = st.number_input(
@@ -330,73 +380,62 @@ def employee_dashboard():
         )
 
         if st.button(
-            "Submit PF Contribution"
+            "Submit PF Contribution",
+            type="primary"
         ):
-
-            connection = get_connection()
-            cursor = connection.cursor()
 
             month_year = f"{month} {year}"
 
-            # Check duplicate submission
+            try:
 
-            cursor.execute(
-                """
-                SELECT id
-                FROM pf_contributions
-                WHERE employee_id = ?
-                AND month = ?
-                """,
-                (
-                    employee_id,
-                    month_year
+                # Check duplicate
+
+                existing = (
+                    supabase
+                    .table("pf_contributions")
+                    .select("id")
+                    .eq(
+                        "employee_id",
+                        employee_id
+                    )
+                    .eq(
+                        "month",
+                        month_year
+                    )
+                    .execute()
                 )
-            )
 
-            existing = cursor.fetchone()
+                if existing.data:
 
-            if existing:
+                    st.error(
+                        "You have already submitted PF data for this month."
+                    )
+
+                else:
+
+                    supabase.table(
+                        "pf_contributions"
+                    ).insert(
+                        {
+                            "employee_id": employee_id,
+                            "month": month_year,
+                            "basic_salary": basic_salary,
+                            "employee_pf": employee_pf,
+                            "employer_pf": employer_pf
+                        }
+                    ).execute()
+
+                    st.success(
+                        "PF contribution submitted successfully!"
+                    )
+
+            except Exception as e:
 
                 st.error(
-                    "You have already submitted PF data for this month."
+                    "Unable to submit PF contribution."
                 )
 
-            else:
-
-                submission_date = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
-
-                cursor.execute(
-                    """
-                    INSERT INTO pf_contributions
-                    (
-                        employee_id,
-                        month,
-                        basic_salary,
-                        employee_pf,
-                        employer_pf,
-                        submission_date
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        employee_id,
-                        month_year,
-                        basic_salary,
-                        employee_pf,
-                        employer_pf,
-                        submission_date
-                    )
-                )
-
-                connection.commit()
-
-                st.success(
-                    "PF contribution submitted successfully!"
-                )
-
-            connection.close()
+                st.write(e)
 
 
     # ======================================
@@ -406,41 +445,52 @@ def employee_dashboard():
     elif menu == "My PF Records":
 
         st.header(
-            "My PF Records"
+            "📊 My PF Records"
         )
 
-        connection = get_connection()
+        try:
 
-        df = pd.read_sql_query(
-            """
-            SELECT
-                month,
-                basic_salary,
-                employee_pf,
-                employer_pf,
-                submission_date
-            FROM pf_contributions
-            WHERE employee_id = ?
-            ORDER BY submission_date DESC
-            """,
-            connection,
-            params=(employee_id,)
-        )
-
-        connection.close()
-
-        if df.empty:
-
-            st.info(
-                "You have no PF records yet."
+            result = (
+                supabase
+                .table("pf_contributions")
+                .select(
+                    "month, basic_salary, employee_pf, employer_pf, submission_date"
+                )
+                .eq(
+                    "employee_id",
+                    employee_id
+                )
+                .order(
+                    "submission_date",
+                    desc=True
+                )
+                .execute()
             )
 
-        else:
+            if result.data:
 
-            st.dataframe(
-                df,
-                use_container_width=True
+                df = pd.DataFrame(
+                    result.data
+                )
+
+                st.dataframe(
+                    df,
+                    use_container_width=True
+                )
+
+            else:
+
+                st.info(
+                    "You have no PF records yet."
+                )
+
+        except Exception as e:
+
+            st.error(
+                "Unable to load your PF records."
             )
+
+            st.write(e)
 
 
     # ======================================
@@ -450,7 +500,7 @@ def employee_dashboard():
     elif menu == "Change Password":
 
         st.header(
-            "Change Password"
+            "🔐 Change Password"
         )
 
         current_password = st.text_input(
@@ -469,31 +519,45 @@ def employee_dashboard():
         )
 
         if st.button(
-            "Change Password"
+            "Change Password",
+            type="primary"
         ):
 
-            connection = get_connection()
-            cursor = connection.cursor()
+            try:
 
-            cursor.execute(
-                """
-                SELECT password
-                FROM employees
-                WHERE employee_id = ?
-                """,
-                (employee_id,)
-            )
+                result = (
+                    supabase
+                    .table("employees")
+                    .select("password")
+                    .eq(
+                        "employee_id",
+                        employee_id
+                    )
+                    .execute()
+                )
 
-            result = cursor.fetchone()
+                if not result.data:
 
-            if result:
+                    st.error(
+                        "Employee account not found."
+                    )
 
-                if check_password(
-                    current_password,
-                    result[0]
-                ):
+                else:
 
-                    if new_password != confirm_password:
+                    stored_password = result.data[0][
+                        "password"
+                    ]
+
+                    if not check_password(
+                        current_password,
+                        stored_password
+                    ):
+
+                        st.error(
+                            "Current password is incorrect."
+                        )
+
+                    elif new_password != confirm_password:
 
                         st.error(
                             "New passwords do not match."
@@ -507,35 +571,36 @@ def employee_dashboard():
 
                     else:
 
-                        new_hashed_password = hash_password(
+                        new_hash = hash_password(
                             new_password
                         )
 
-                        cursor.execute(
-                            """
-                            UPDATE employees
-                            SET password = ?
-                            WHERE employee_id = ?
-                            """,
-                            (
-                                new_hashed_password,
+                        (
+                            supabase
+                            .table("employees")
+                            .update(
+                                {
+                                    "password": new_hash
+                                }
+                            )
+                            .eq(
+                                "employee_id",
                                 employee_id
                             )
+                            .execute()
                         )
-
-                        connection.commit()
 
                         st.success(
                             "Password changed successfully!"
                         )
 
-                else:
+            except Exception as e:
 
-                    st.error(
-                        "Current password is incorrect."
-                    )
+                st.error(
+                    "Unable to change password."
+                )
 
-            connection.close()
+                st.write(e)
 
 
 # ==========================================
@@ -545,7 +610,7 @@ def employee_dashboard():
 def admin_dashboard():
 
     st.title(
-        "Admin Dashboard"
+        "🛡️ Admin Dashboard"
     )
 
     menu = st.sidebar.selectbox(
@@ -565,54 +630,61 @@ def admin_dashboard():
     if menu == "All PF Contributions":
 
         st.header(
-            "All Employee PF Contributions"
+            "📊 All Employee PF Contributions"
         )
 
-        connection = get_connection()
+        try:
 
-        df = pd.read_sql_query(
-            """
-            SELECT
-                p.employee_id,
-                e.employee_name,
-                p.month,
-                p.basic_salary,
-                p.employee_pf,
-                p.employer_pf,
-                p.submission_date
-            FROM pf_contributions p
-            JOIN employees e
-            ON p.employee_id = e.employee_id
-            ORDER BY p.submission_date DESC
-            """,
-            connection
-        )
-
-        connection.close()
-
-        if df.empty:
-
-            st.info(
-                "No PF submissions yet."
+            result = (
+                supabase
+                .table("pf_contributions")
+                .select(
+                    "employee_id, month, basic_salary, employee_pf, employer_pf, submission_date"
+                )
+                .order(
+                    "submission_date",
+                    desc=True
+                )
+                .execute()
             )
 
-        else:
+            if result.data:
 
-            st.dataframe(
-                df,
-                use_container_width=True
+                df = pd.DataFrame(
+                    result.data
+                )
+
+                st.dataframe(
+                    df,
+                    use_container_width=True
+                )
+
+                csv_data = df.to_csv(
+                    index=False
+                ).encode(
+                    "utf-8"
+                )
+
+                st.download_button(
+                    label="Download PF Data",
+                    data=csv_data,
+                    file_name="PF_Contributions.csv",
+                    mime="text/csv"
+                )
+
+            else:
+
+                st.info(
+                    "No PF submissions yet."
+                )
+
+        except Exception as e:
+
+            st.error(
+                "Unable to load PF data."
             )
 
-            csv_data = df.to_csv(
-                index=False
-            ).encode("utf-8")
-
-            st.download_button(
-                label="Download PF Data",
-                data=csv_data,
-                file_name="PF_Contributions.csv",
-                mime="text/csv"
-            )
+            st.write(e)
 
 
     # ======================================
@@ -622,29 +694,47 @@ def admin_dashboard():
     elif menu == "Employee List":
 
         st.header(
-            "Employee List"
+            "👥 Employee List"
         )
 
-        connection = get_connection()
+        try:
 
-        df = pd.read_sql_query(
-            """
-            SELECT
-                employee_id,
-                employee_name,
-                username
-            FROM employees
-            ORDER BY employee_id
-            """,
-            connection
-        )
+            result = (
+                supabase
+                .table("employees")
+                .select(
+                    "employee_id, employee_name, username"
+                )
+                .order(
+                    "employee_id"
+                )
+                .execute()
+            )
 
-        connection.close()
+            if result.data:
 
-        st.dataframe(
-            df,
-            use_container_width=True
-        )
+                df = pd.DataFrame(
+                    result.data
+                )
+
+                st.dataframe(
+                    df,
+                    use_container_width=True
+                )
+
+            else:
+
+                st.info(
+                    "No employees found."
+                )
+
+        except Exception as e:
+
+            st.error(
+                "Unable to load employees."
+            )
+
+            st.write(e)
 
 
     # ======================================
@@ -654,7 +744,7 @@ def admin_dashboard():
     elif menu == "Create Employee":
 
         st.header(
-            "Create New Employee"
+            "➕ Create New Employee"
         )
 
         employee_id = st.text_input(
@@ -680,7 +770,8 @@ def admin_dashboard():
         )
 
         if st.button(
-            "Create Employee"
+            "Create Employee",
+            type="primary"
         ):
 
             if (
@@ -708,50 +799,38 @@ def admin_dashboard():
 
             else:
 
-                connection = get_connection()
-                cursor = connection.cursor()
-
                 try:
 
                     hashed_password = hash_password(
                         password
                     )
 
-                    cursor.execute(
-                        """
-                        INSERT INTO employees
-                        (
-                            employee_id,
-                            employee_name,
-                            username,
-                            password,
-                            must_change_password
+                    (
+                        supabase
+                        .table("employees")
+                        .insert(
+                            {
+                                "employee_id": employee_id,
+                                "employee_name": employee_name,
+                                "username": username,
+                                "password": hashed_password,
+                                "must_change_password": 1
+                            }
                         )
-                        VALUES (?, ?, ?, ?, 1)
-                        """,
-                        (
-                            employee_id,
-                            employee_name,
-                            username,
-                            hashed_password
-                        )
+                        .execute()
                     )
-
-                    connection.commit()
 
                     st.success(
                         f"Employee {employee_name} created successfully!"
                     )
 
-                except sqlite3.IntegrityError:
+                except Exception as e:
 
                     st.error(
-                        "Employee ID or Username already exists."
+                        "Employee ID or Username may already exist."
                     )
 
-                finally:
-
-                    connection.close()
+                    st.write(e)
 
 
 # ==========================================
@@ -770,10 +849,6 @@ if not st.session_state.logged_in:
 
 else:
 
-    # ======================================
-    # EMPLOYEE
-    # ======================================
-
     if st.session_state.user_type == "employee":
 
         if st.session_state.must_change_password:
@@ -785,18 +860,10 @@ else:
             employee_dashboard()
 
 
-    # ======================================
-    # ADMIN
-    # ======================================
-
     elif st.session_state.user_type == "admin":
 
         admin_dashboard()
 
-
-    # ======================================
-    # LOGOUT
-    # ======================================
 
     if st.sidebar.button(
         "Logout"
