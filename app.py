@@ -68,57 +68,39 @@ def check_password(password, hashed_password):
 
 def login(username, password):
 
-    # Check Admin
+    username = username.strip()
+
+    st.write("DEBUG Username entered:", username)
+
     admin_result = (
         supabase
         .table("admins")
         .select("id, username, password")
-        .eq("username", username.strip())
+        .eq("username", username)
         .execute()
     )
+
+    st.write("DEBUG Admin records found:", len(admin_result.data))
 
     if admin_result.data:
 
         admin = admin_result.data[0]
 
-        stored_password = admin["password"]
+        st.write("DEBUG Admin username:", admin["username"])
 
-        if bcrypt.checkpw(
+        password_ok = bcrypt.checkpw(
             password.encode("utf-8"),
-            stored_password.encode("utf-8")
-        ):
+            admin["password"].encode("utf-8")
+        )
+
+        st.write("DEBUG Password correct:", password_ok)
+
+        if password_ok:
 
             return {
                 "user_type": "admin",
                 "user_id": admin["username"],
                 "must_change_password": False
-            }
-
-    # Check Employee
-    employee_result = (
-        supabase
-        .table("employees")
-        .select("*")
-        .eq("username", username.strip())
-        .execute()
-    )
-
-    if employee_result.data:
-
-        employee = employee_result.data[0]
-
-        if bcrypt.checkpw(
-            password.encode("utf-8"),
-            employee["password"].encode("utf-8")
-        ):
-
-            return {
-                "user_type": "employee",
-                "user_id": employee["employee_id"],
-                "employee_name": employee["employee_name"],
-                "must_change_password": bool(
-                    employee["must_change_password"]
-                )
             }
 
     return None
