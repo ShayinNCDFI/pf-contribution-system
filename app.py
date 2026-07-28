@@ -62,28 +62,11 @@ def check_password(password, hashed_password):
 
         return False
 
-
 # ==========================================
 # LOGIN
 # ==========================================
 
 def login(username, password):
-
-    # Check Admin
-
-    admin_result = (
-        supabase
-        .table("admins")
-        .select("*")
-        .eq("username", username)
-        .execute()
-    )
-
-    if admin_result.data:
-
-        admin = admin_result.data[0]
-
-        def login(username, password):
 
     # Check Admin
     admin_result = (
@@ -110,7 +93,6 @@ def login(username, password):
                 "user_id": admin["username"],
                 "must_change_password": False
             }
-
 
     # Check Employee
     employee_result = (
@@ -140,47 +122,7 @@ def login(username, password):
             }
 
     return None
-
-            return {
-                "user_type": "admin",
-                "user_id": admin["username"],
-                "must_change_password": False
-            }
-
-
-    # Check Employee
-
-    employee_result = (
-        supabase
-        .table("employees")
-        .select("*")
-        .eq("username", username)
-        .execute()
-    )
-
-    if employee_result.data:
-
-        employee = employee_result.data[0]
-
-        if check_password(
-            password,
-            employee["password"]
-        ):
-
-            return {
-                "user_type": "employee",
-                "user_id": employee["employee_id"],
-                "employee_name": employee["employee_name"],
-                "must_change_password": bool(
-                    employee["must_change_password"]
-                )
-            }
-
-
-    return None
-
-
-# ==========================================
+    # ==========================================
 # LOGIN PAGE
 # ==========================================
 
