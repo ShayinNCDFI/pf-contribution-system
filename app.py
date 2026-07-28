@@ -29,7 +29,13 @@ def get_supabase():
 
 
 supabase = get_supabase()
-
+try:
+    test = supabase.table("admins").select("id, username").execute()
+    st.write("Supabase connection successful")
+    st.write(test.data)
+except Exception as e:
+    st.error("Supabase connection failed")
+    st.write(e)
 
 # ==========================================
 # PASSWORD FUNCTIONS
