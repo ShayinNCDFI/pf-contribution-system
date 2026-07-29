@@ -720,23 +720,21 @@ def admin_dashboard():
 
             st.write(e)
 
-
     # ======================================
     # CREATE EMPLOYEE
     # ======================================
 
     elif menu == "Create Employee":
 
-    st.header("➕ Create Employee")
+        st.header("➕ Create Employee")
 
-    option = st.radio(
-        "Choose how to create employees",
-        [
-            "Create One Employee Manually",
-            "Import Employees from Excel"
-        ]
-    )
-
+        option = st.radio(
+            "Choose how to create employees",
+            [
+                "Create One Employee Manually",
+                "Import Employees from Excel"
+            ]
+        )
     # ======================================
     # OPTION 1: MANUAL EMPLOYEE CREATION
     # ======================================
