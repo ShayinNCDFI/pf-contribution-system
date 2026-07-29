@@ -723,11 +723,11 @@ def admin_dashboard():
     # ======================================
     # CREATE EMPLOYEE
     # ======================================
-
     elif menu == "Create Employee":
 
         st.header("➕ Create Employee")
 
+        # Choose creation method
         option = st.radio(
             "Choose how to create employees",
             [
@@ -736,9 +736,9 @@ def admin_dashboard():
             ]
         )
 
-        # ======================================
-        # OPTION 1: MANUAL CREATION
-        # ======================================
+        # ==========================================
+        # OPTION 1: CREATE ONE EMPLOYEE MANUALLY
+        # ==========================================
 
         if option == "Create One Employee Manually":
 
@@ -757,7 +757,7 @@ def admin_dashboard():
             )
 
             st.info(
-                "Temporary password: NCDFI"
+                "Temporary password for the employee: NCDFI"
             )
 
             if st.button(
@@ -766,9 +766,9 @@ def admin_dashboard():
             ):
 
                 if (
-                    not employee_id
-                    or not employee_name
-                    or not username
+                    not employee_id.strip()
+                    or not employee_name.strip()
+                    or not username.strip()
                 ):
 
                     st.error(
@@ -779,12 +779,15 @@ def admin_dashboard():
 
                     try:
 
+                        # Temporary password
                         temporary_password = "NCDFI"
 
+                        # Hash password
                         hashed_password = hash_password(
                             temporary_password
                         )
 
+                        # Insert employee into Supabase
                         (
                             supabase
                             .table("employees")
@@ -801,7 +804,8 @@ def admin_dashboard():
                         )
 
                         st.success(
-                            f"Employee {employee_name} created successfully!"
+                            f"Employee {employee_name.strip()} "
+                            f"created successfully!"
                         )
 
                         st.info(
@@ -816,9 +820,10 @@ def admin_dashboard():
 
                         st.write(e)
 
-        # ======================================
-        # OPTION 2: EXCEL IMPORT
-        # ======================================
+
+        # ==========================================
+        # OPTION 2: IMPORT EMPLOYEES FROM EXCEL
+        # ==========================================
 
         elif option == "Import Employees from Excel":
 
@@ -827,7 +832,11 @@ def admin_dashboard():
             )
 
             st.info(
-                "Excel columns required: employee_id, employee_name, username"
+                "Your Excel file must contain these columns:"
+            )
+
+            st.code(
+                "employee_id | employee_name | username"
             )
 
             uploaded_file = st.file_uploader(
@@ -839,16 +848,19 @@ def admin_dashboard():
 
                 try:
 
+                    # Read Excel file
                     employee_df = pd.read_excel(
                         uploaded_file
                     )
 
+                    # Required columns
                     required_columns = [
                         "employee_id",
                         "employee_name",
                         "username"
                     ]
 
+                    # Check missing columns
                     missing_columns = [
                         column
                         for column in required_columns
@@ -858,24 +870,26 @@ def admin_dashboard():
                     if missing_columns:
 
                         st.error(
-                            f"Missing columns: "
-                            f"{', '.join(missing_columns)}"
+                            "Missing columns: "
+                            + ", ".join(missing_columns)
                         )
 
                     else:
 
-                        st.write(
-                            f"Employees found: "
-                            f"{len(employee_df)}"
+                        st.success(
+                            f"{len(employee_df)} employees "
+                            f"found in Excel."
                         )
 
+                        # Preview Excel data
                         st.dataframe(
                             employee_df,
                             use_container_width=True
                         )
 
                         st.info(
-                            "Temporary password for all employees: NCDFI"
+                            "Temporary password for all "
+                            "imported employees: NCDFI"
                         )
 
                         if st.button(
@@ -886,12 +900,15 @@ def admin_dashboard():
                             success_count = 0
                             failed_count = 0
 
+                            # Temporary password
                             temporary_password = "NCDFI"
 
+                            # Hash password once
                             hashed_password = hash_password(
                                 temporary_password
                             )
 
+                            # Process each employee
                             for _, row in employee_df.iterrows():
 
                                 try:
@@ -908,9 +925,10 @@ def admin_dashboard():
                                         row["username"]
                                     ).strip()
 
+                                    # Check empty values
                                     if (
                                         not employee_id
-                                        or employee_id == "nan"
+                                        or employee_id.lower() == "nan"
                                     ):
 
                                         raise ValueError(
@@ -919,7 +937,7 @@ def admin_dashboard():
 
                                     if (
                                         not employee_name
-                                        or employee_name == "nan"
+                                        or employee_name.lower() == "nan"
                                     ):
 
                                         raise ValueError(
@@ -928,13 +946,14 @@ def admin_dashboard():
 
                                     if (
                                         not username
-                                        or username == "nan"
+                                        or username.lower() == "nan"
                                     ):
 
                                         raise ValueError(
                                             "Username is empty"
                                         )
 
+                                    # Insert employee
                                     (
                                         supabase
                                         .table("employees")
@@ -961,6 +980,7 @@ def admin_dashboard():
                                         f"{employee_id}: {str(e)}"
                                     )
 
+                            # Show import results
                             st.success(
                                 f"Successfully imported "
                                 f"{success_count} employees."
@@ -972,9 +992,22 @@ def admin_dashboard():
                                     f"{failed_count} employees "
                                     f"could not be imported."
                                 )
-# ==========================================
-# MAIN APPLICATION
-# ==========================================
+
+                            st.info(
+                                "Temporary password for all "
+                                "successfully imported employees: NCDFI"
+                            )
+
+                except Exception as e:
+
+                    st.error(
+                        "Unable to read Excel file."
+                    )
+
+                    st.write(e)
+    # ==========================================
+    # MAIN APPLICATION
+    # ==========================================
 
 if "logged_in" not in st.session_state:
 
