@@ -59,14 +59,19 @@ def check_password(password, hashed_password):
 # ==========================================
 # LOGIN
 # ==========================================
-
 def login(username, password):
+
+    username = username.strip()
+
+    # ==========================================
+    # CHECK ADMIN
+    # ==========================================
 
     admin_result = (
         supabase
         .table("admins")
         .select("id, username, password")
-        .eq("username", username.strip())
+        .eq("username", username)
         .execute()
     )
 
@@ -74,9 +79,9 @@ def login(username, password):
 
         admin = admin_result.data[0]
 
-        if bcrypt.checkpw(
-            password.encode("utf-8"),
-            admin["password"].encode("utf-8")
+        if check_password(
+            password,
+            admin["password"]
         ):
 
             return {
@@ -84,6 +89,44 @@ def login(username, password):
                 "user_id": admin["username"],
                 "must_change_password": False
             }
+
+
+    # ==========================================
+    # CHECK EMPLOYEE
+    # ==========================================
+
+    employee_result = (
+        supabase
+        .table("employees")
+        .select(
+            "employee_id, employee_name, username, password, must_change_password"
+        )
+        .eq("username", username)
+        .execute()
+    )
+
+    if employee_result.data:
+
+        employee = employee_result.data[0]
+
+        if check_password(
+            password,
+            employee["password"]
+        ):
+
+            return {
+                "user_type": "employee",
+                "user_id": employee["employee_id"],
+                "employee_name": employee["employee_name"],
+                "must_change_password": bool(
+                    employee["must_change_password"]
+                )
+            }
+
+
+    # ==========================================
+    # INVALID LOGIN
+    # ==========================================
 
     return None
 # ==========================================
