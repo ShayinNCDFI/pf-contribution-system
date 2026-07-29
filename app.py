@@ -347,44 +347,22 @@ def employee_dashboard():
         month = st.selectbox(
             "Select Month",
             [
-                "January",
-                "February",
-                "March",
-                "April",
-                "May",
-                "June",
                 "July",
-                "August",
-                "September",
-                "October",
-                "November",
-                "December"
             ]
         )
 
         year = st.number_input(
             "Year",
-            min_value=2020,
-            max_value=2100,
+            min_value=2026,
+            max_value=2026,
             value=2026
-        )
-
-        basic_salary = st.number_input(
-            "Basic Salary",
-            min_value=0.0,
-            step=100.0
         )
 
         employee_pf = st.number_input(
             "Employee PF Contribution",
             min_value=0.0,
             step=100.0
-        )
-
-        employer_pf = st.number_input(
-            "Employer PF Contribution",
-            min_value=0.0,
-            step=100.0
+        
         )
 
         if st.button(
