@@ -727,9 +727,23 @@ def admin_dashboard():
 
     elif menu == "Create Employee":
 
-        st.header(
-            "➕ Create New Employee"
-        )
+    st.header("➕ Create Employee")
+
+    option = st.radio(
+        "Choose how to create employees",
+        [
+            "Create One Employee Manually",
+            "Import Employees from Excel"
+        ]
+    )
+
+    # ======================================
+    # OPTION 1: MANUAL EMPLOYEE CREATION
+    # ======================================
+
+    if option == "Create One Employee Manually":
+
+        st.subheader("👤 Create One Employee")
 
         employee_id = st.text_input(
             "Employee ID"
@@ -743,14 +757,8 @@ def admin_dashboard():
             "Username"
         )
 
-        password = st.text_input(
-            "Temporary Password",
-            type="password"
-        )
-
-        confirm_password = st.text_input(
-            "Confirm Temporary Password",
-            type="password"
+        st.info(
+            "Temporary password for new employees: NCDFI"
         )
 
         if st.button(
@@ -762,31 +770,22 @@ def admin_dashboard():
                 not employee_id
                 or not employee_name
                 or not username
-                or not password
             ):
 
                 st.error(
                     "Please fill in all fields."
                 )
 
-            elif password != confirm_password:
-
-                st.error(
-                    "Passwords do not match."
-                )
-
-            elif len(password) < 6:
-
-                st.error(
-                    "Password must be at least 6 characters."
-                )
-
             else:
 
                 try:
 
+                    # Default temporary password
+                    temporary_password = "NCDFI"
+
+                    # Hash temporary password
                     hashed_password = hash_password(
-                        password
+                        temporary_password
                     )
 
                     (
@@ -794,9 +793,9 @@ def admin_dashboard():
                         .table("employees")
                         .insert(
                             {
-                                "employee_id": employee_id,
-                                "employee_name": employee_name,
-                                "username": username,
+                                "employee_id": employee_id.strip(),
+                                "employee_name": employee_name.strip(),
+                                "username": username.strip(),
                                 "password": hashed_password,
                                 "must_change_password": 1
                             }
@@ -808,15 +807,193 @@ def admin_dashboard():
                         f"Employee {employee_name} created successfully!"
                     )
 
+                    st.info(
+                        "Temporary password: NCDFI"
+                    )
+
                 except Exception as e:
 
                     st.error(
-                        "Employee ID or Username may already exist."
+                        "Unable to create employee."
                     )
 
                     st.write(e)
 
 
+    # ======================================
+    # OPTION 2: EXCEL BULK IMPORT
+    # ======================================
+
+    elif option == "Import Employees from Excel":
+
+        st.subheader("📊 Import Employees from Excel")
+
+        st.info(
+            "Excel columns required: employee_id, employee_name, username"
+        )
+
+        uploaded_file = st.file_uploader(
+            "Upload Employee Excel File",
+            type=["xlsx"]
+        )
+
+        if uploaded_file is not None:
+
+            try:
+
+                employee_df = pd.read_excel(
+                    uploaded_file
+                )
+
+                required_columns = [
+                    "employee_id",
+                    "employee_name",
+                    "username"
+                ]
+
+                missing_columns = [
+                    column
+                    for column in required_columns
+                    if column not in employee_df.columns
+                ]
+
+                if missing_columns:
+
+                    st.error(
+                        f"Missing columns: {', '.join(missing_columns)}"
+                    )
+
+                else:
+
+                    st.write(
+                        f"Employees found in Excel: "
+                        f"{len(employee_df)}"
+                    )
+
+                    st.dataframe(
+                        employee_df,
+                        use_container_width=True
+                    )
+
+                    st.info(
+                        "All imported employees will have "
+                        "the temporary password: NCDFI"
+                    )
+
+                    if st.button(
+                        "Import All Employees",
+                        type="primary"
+                    ):
+
+                        success_count = 0
+                        failed_count = 0
+
+                        # Default temporary password
+                        temporary_password = "NCDFI"
+
+                        # Hash password once
+                        hashed_password = hash_password(
+                            temporary_password
+                        )
+
+                        for _, row in employee_df.iterrows():
+
+                            try:
+
+                                employee_id = str(
+                                    row["employee_id"]
+                                ).strip()
+
+                                employee_name = str(
+                                    row["employee_name"]
+                                ).strip()
+
+                                username = str(
+                                    row["username"]
+                                ).strip()
+
+                                # Validate data
+
+                                if (
+                                    not employee_id
+                                    or employee_id == "nan"
+                                ):
+
+                                    raise ValueError(
+                                        "Employee ID is empty"
+                                    )
+
+                                if (
+                                    not employee_name
+                                    or employee_name == "nan"
+                                ):
+
+                                    raise ValueError(
+                                        "Employee name is empty"
+                                    )
+
+                                if (
+                                    not username
+                                    or username == "nan"
+                                ):
+
+                                    raise ValueError(
+                                        "Username is empty"
+                                    )
+
+                                # Insert employee
+
+                                (
+                                    supabase
+                                    .table("employees")
+                                    .insert(
+                                        {
+                                            "employee_id": employee_id,
+                                            "employee_name": employee_name,
+                                            "username": username,
+                                            "password": hashed_password,
+                                            "must_change_password": 1
+                                        }
+                                    )
+                                    .execute()
+                                )
+
+                                success_count += 1
+
+                            except Exception as e:
+
+                                failed_count += 1
+
+                                st.warning(
+                                    f"Failed to import "
+                                    f"{row.get('employee_id', 'Unknown')}: "
+                                    f"{str(e)}"
+                                )
+
+                        st.success(
+                            f"Successfully imported "
+                            f"{success_count} employees."
+                        )
+
+                        if failed_count > 0:
+
+                            st.warning(
+                                f"{failed_count} employees "
+                                f"could not be imported."
+                            )
+
+                        st.info(
+                            "Temporary password for all "
+                            "successfully imported employees: NCDFI"
+                        )
+
+            except Exception as e:
+
+                st.error(
+                    "Unable to read Excel file."
+                )
+
+                st.write(e)
 # ==========================================
 # MAIN APPLICATION
 # ==========================================
