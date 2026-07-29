@@ -30,9 +30,7 @@ CREATE TABLE IF NOT EXISTS pf_contributions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id TEXT NOT NULL,
     month TEXT NOT NULL,
-    basic_salary REAL NOT NULL,
     employee_pf REAL NOT NULL,
-    employer_pf REAL NOT NULL,
     submission_date TEXT NOT NULL,
     FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
 )
