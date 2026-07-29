@@ -405,9 +405,7 @@ def employee_dashboard():
                         {
                             "employee_id": employee_id,
                             "month": month_year,
-                            "basic_salary": basic_salary,
                             "employee_pf": employee_pf,
-                            "employer_pf": employer_pf
                         }
                     ).execute()
 
@@ -440,7 +438,7 @@ def employee_dashboard():
                 supabase
                 .table("pf_contributions")
                 .select(
-                    "month, basic_salary, employee_pf, employer_pf, submission_date"
+                    "month, employee_pf, submission_date"
                 )
                 .eq(
                     "employee_id",
@@ -625,7 +623,7 @@ def admin_dashboard():
                 supabase
                 .table("pf_contributions")
                 .select(
-                    "employee_id, month, basic_salary, employee_pf, employer_pf, submission_date"
+                    "employee_id, month, employee_pf,submission_date"
                 )
                 .order(
                     "submission_date",
